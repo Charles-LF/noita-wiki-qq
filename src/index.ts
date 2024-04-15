@@ -32,6 +32,7 @@ export const inject = ["puppeteer"];
 export const name = "noita-wiki-qq";
 export const usage = `这是个noita.wiki.gg的测试插件
   更新日志: 
+    0.0.2 添加Md模板支持
     0.0.1 初始化
 `;
 
@@ -39,23 +40,27 @@ export interface Config {
   API: string;
   imgLocalPath: string;
   imgPublicPath: string;
+  mdId: string;
 }
 
 export const Config: Schema<Config> = Schema.object({
   API: Schema.string()
     .description("API地址")
     .default("https://noita.wiki.gg/zh/api.php"),
-  imgLocalPath: Schema.string().description("图片保存路径"),
+  imgLocalPath: Schema.string()
+    .description("图片保存路径")
+    .default(`/root/noitaImgs/`),
   imgPublicPath: Schema.string()
     .description("图片公网路径")
     .default(`https://test.com/`),
+  mdId: Schema.string().default("102019091_1708758661").description("模板ID"),
 });
 
 export function apply(ctx: Context, config: Config) {
   const logger = ctx.logger("noita-wiki-qq");
   ctx
     // 指令注册
-    .command("wiki <itemName:string>", "wiki查询")
+    .command("noitawiki <itemName:string>", "wiki查询")
     // .option("update", "-u 更新本地缓存", { authority: 2 })
     .option("delete", "-d 删除本地缓存", { authority: 2 })
     // .option("rename", "-r <newName> 重命名本地缓存", { authority: 2 })
@@ -103,12 +108,65 @@ export function apply(ctx: Context, config: Config) {
       //判断文件是否在本地有缓存
       if (lib.checkFileExists(filePath)) {
         // 在, 直接发送 或者以MD发送(
-        return `文件缓存已命中，缓存时间为：${lib.getFileModifyTime(
-          filePath
-        )} 请前往以下网址查看:${
-          config.imgPublicPath +
-          itemName.replace(/\//g, "-").replace(/:/g, "-").replace(/'/g, "-")
-        }.jpeg)}`;
+        await session.bot.internal.sendMessage(session.guildId, {
+          content: "111",
+          msg_type: 2,
+          markdown: {
+            custom_template_id: config.mdId,
+            params: [
+              {
+                key: "text1",
+                values: [
+                  `文件缓存已命中，缓存时间为：${lib.getFileModifyTime(
+                    filePath
+                  )} 请前往以下网址查看:[🔗${itemName}`,
+                ],
+              },
+              {
+                key: "text2",
+                values: [
+                  `](${
+                    config.imgPublicPath +
+                    itemName
+                      .replace(/\//g, "-")
+                      .replace(/:/g, "-")
+                      .replace(/'/g, "-")
+                  }.jpeg)`,
+                ],
+              },
+            ],
+          },
+          keyboard: {
+            content: {
+              rows: [
+                {
+                  buttons: [
+                    {
+                      id: "1",
+                      render_data: {
+                        label: "我也要查wiki",
+                        visited_label: "我也要查wiki",
+                      },
+                      action: {
+                        type: 2,
+                        permission: {
+                          type: 2,
+                        },
+                        unsupport_tips: "兼容文本",
+                        data: "/noitawiki",
+                        enter: false,
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          msg_id: session.messageId,
+          timestamp: session.timestamp,
+          msg_seq: Math.floor(Math.random() * 500),
+        });
+        return;
       } else {
         // 不在,请求API
         const res = await lib.getFromWikigg(config.API, ctx, itemName);
@@ -127,7 +185,65 @@ export function apply(ctx: Context, config: Config) {
               config
             );
             if (res) {
-              return `已尝试截图冰保存至本地,请前往以下网址查看:${publicPath}`;
+              await session.bot.internal.sendMessage(session.guildId, {
+                content: "111",
+                msg_type: 2,
+                markdown: {
+                  custom_template_id: config.mdId,
+                  params: [
+                    {
+                      key: "text1",
+                      values: [
+                        `文件缓存已命中，缓存时间为：${lib.getFileModifyTime(
+                          filePath
+                        )} 请前往以下网址查看:[🔗${itemName}`,
+                      ],
+                    },
+                    {
+                      key: "text2",
+                      values: [
+                        `](${
+                          config.imgPublicPath +
+                          itemName
+                            .replace(/\//g, "-")
+                            .replace(/:/g, "-")
+                            .replace(/'/g, "-")
+                        }.jpeg)`,
+                      ],
+                    },
+                  ],
+                },
+                keyboard: {
+                  content: {
+                    rows: [
+                      {
+                        buttons: [
+                          {
+                            id: "1",
+                            render_data: {
+                              label: "我也要查wiki",
+                              visited_label: "我也要查wiki",
+                            },
+                            action: {
+                              type: 2,
+                              permission: {
+                                type: 2,
+                              },
+                              unsupport_tips: "兼容文本",
+                              data: "/noitawiki",
+                              enter: false,
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                msg_id: session.messageId,
+                timestamp: session.timestamp,
+                msg_seq: Math.floor(Math.random() * 500),
+              });
+              return;
             } else {
               return `截图失败,请联系开发者或再试一次...`;
             }
@@ -140,9 +256,165 @@ export function apply(ctx: Context, config: Config) {
               four = "待选4",
               five = "待选5",
             ] = title;
-            session.send(
-              `喔,出现了一丢丢错误,没有在wiki里找到你需要的物品,以下是相近的物品:\n1. ${one}\n2. ${two}\n3. ${three}\n4. ${four}\n5. ${five}\n请输入序号选择`
-            );
+            // session.send(
+            //   `喔,出现了一丢丢错误,没有在wiki里找到你需要的物品,以下是相近的物品:\n1. ${one}\n2. ${two}\n3. ${three}\n4. ${four}\n5. ${five}\n请输入序号选择`
+            // );
+            await session.bot.internal.sendMessage(session.guildId, {
+              content: "111",
+              msg_type: 2,
+              markdown: {
+                custom_template_id: config.mdId,
+                params: [
+                  {
+                    key: "text1",
+                    values: ["Oh,No,出现了一丢丢问题"],
+                  },
+                  {
+                    key: "text2",
+                    values: [
+                      "没有找到您查询的关键字,以下是自主搜索的结果,你康康有没有需要的,点击按钮选择,没有的话,请等待超时结束本轮查询以减轻服务器压力",
+                    ],
+                  },
+                  {
+                    key: "text3",
+                    values: [`占位`],
+                  },
+                  {
+                    key: "text4",
+                    values: [`1- ${one}`],
+                  },
+                  {
+                    key: "text5",
+                    values: [`2- ${two}`],
+                  },
+                  {
+                    key: "text6",
+                    values: [`3- ${three}`],
+                  },
+                  {
+                    key: "text7",
+                    values: [`4- ${four}`],
+                  },
+                  {
+                    key: "text8",
+                    values: [`5- ${five}`],
+                  },
+                ],
+              },
+              keyboard: {
+                content: {
+                  rows: [
+                    {
+                      buttons: [
+                        {
+                          id: "1",
+                          render_data: {
+                            label: `①`,
+                            visited_label: `①`,
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "1",
+                            enter: true,
+                          },
+                        },
+                        {
+                          id: "2",
+                          render_data: {
+                            label: `②`,
+                            visited_label: `②`,
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "2",
+                            enter: true,
+                          },
+                        },
+                        {
+                          id: "3",
+                          render_data: {
+                            label: `③`,
+                            visited_label: `③`,
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "3",
+                            enter: true,
+                          },
+                        },
+                        {
+                          id: "4",
+                          render_data: {
+                            label: `④`,
+                            visited_label: `④`,
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "4",
+                            enter: true,
+                          },
+                        },
+                        {
+                          id: "5",
+                          render_data: {
+                            label: `⑤`,
+                            visited_label: `⑤`,
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "5",
+                            enter: true,
+                          },
+                        },
+                      ],
+                    },
+                    {
+                      buttons: [
+                        {
+                          id: "1",
+                          render_data: {
+                            label: "我也要查wiki",
+                            visited_label: "我也要查wiki",
+                          },
+                          action: {
+                            type: 2,
+                            permission: {
+                              type: 2,
+                            },
+                            unsupport_tips: "兼容文本",
+                            data: "/noitawiki",
+                            enter: false,
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+              msg_id: session.messageId,
+              timestamp: session.timestamp,
+              msg_seq: Math.floor(Math.random() * 500),
+            });
             const awser =
               +(await session.prompt(50 * 1000))
                 ?.replace(/\s+/g, "")
@@ -155,13 +427,65 @@ export function apply(ctx: Context, config: Config) {
                 config
               );
               if (res) {
-                return `已尝试截图保存至本地,请前往以下网址查看:${
-                  config.imgPublicPath +
-                  title[awser - 1]
-                    .replace(/\//g, "-")
-                    .replace(/:/g, "-")
-                    .replace(/'/g, "-")
-                }.jpeg`;
+                await session.bot.internal.sendMessage(session.guildId, {
+                  content: "111",
+                  msg_type: 2,
+                  markdown: {
+                    custom_template_id: config.mdId,
+                    params: [
+                      {
+                        key: "text1",
+                        values: [
+                          `文件缓存已命中，缓存时间为：${lib.getFileModifyTime(
+                            filePath
+                          )} 请前往以下网址查看:[🔗${itemName}`,
+                        ],
+                      },
+                      {
+                        key: "text2",
+                        values: [
+                          `](${
+                            config.imgPublicPath +
+                            itemName
+                              .replace(/\//g, "-")
+                              .replace(/:/g, "-")
+                              .replace(/'/g, "-")
+                          }.jpeg)`,
+                        ],
+                      },
+                    ],
+                  },
+                  keyboard: {
+                    content: {
+                      rows: [
+                        {
+                          buttons: [
+                            {
+                              id: "1",
+                              render_data: {
+                                label: "我也要查wiki",
+                                visited_label: "我也要查wiki",
+                              },
+                              action: {
+                                type: 2,
+                                permission: {
+                                  type: 2,
+                                },
+                                unsupport_tips: "兼容文本",
+                                data: "/noitawiki",
+                                enter: false,
+                              },
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                  msg_id: session.messageId,
+                  timestamp: session.timestamp,
+                  msg_seq: Math.floor(Math.random() * 500),
+                });
+                return;
               }
             } else if (Number.isNaN(awser)) {
               return `已完结本轮查询。如需，如有需要，请重新发起查询.`;
